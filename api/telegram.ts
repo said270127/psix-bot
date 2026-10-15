@@ -1,5 +1,5 @@
 // Vercel serverless funksiyasi: POST /api/telegram
-import { sendToTelegram, type TelegramPayload } from "../server/telegram";
+import { sendToTelegram, type TelegramPayload } from "../server/telegram.js";
 
 type Req = { method?: string; body?: unknown };
 type Res = {
