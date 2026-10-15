@@ -1,7 +1,10 @@
 // Telegram'ga natija yuboradigan umumiy mantiq.
 // Bot tokeni FAQAT serverda (env o'zgaruvchida) turadi, brauzerga chiqmaydi.
 
+import { markDone, storeConfigured } from "./store.js";
+
 export type TelegramPayload = {
+  registrationId?: number;
   fullName: string;
   phoneNumber: string;
   ageCategory: string;
@@ -48,7 +51,7 @@ export function buildMessage(p: TelegramPayload): string {
     : date.toLocaleString("uz-UZ", { timeZone: "Asia/Tashkent" });
 
   const lines: string[] = [
-    "🧠 Yangi test natijasi",
+    p.registrationId ? `🧠 Yangi test natijasi #${Number(p.registrationId)}` : "🧠 Yangi test natijasi",
     "",
     `👤 Ism: ${clip(p.fullName, 100)}`,
     `📞 Telefon: ${clip(p.phoneNumber, 30)}`,
@@ -93,6 +96,16 @@ export async function sendToTelegram(
   }
   if (!payload || typeof payload.fullName !== "string" || typeof payload.result !== "string") {
     return { status: 400, body: { ok: false, error: "Noto'g'ri ma'lumot" } };
+  }
+
+  // Ro'yxatdagi shu odamni "testni tugatdi" deb belgilaymiz (Telegram yuborilmasa ham)
+  const regId = Number(payload.registrationId);
+  if (Number.isInteger(regId) && regId > 0 && storeConfigured()) {
+    try {
+      await markDone(regId, clip(payload.result, 200), Number(payload.score), Number(payload.maxScore));
+    } catch (err) {
+      console.error("Natijani belgilashda xato:", err);
+    }
   }
 
   try {

@@ -27,17 +27,33 @@ export default function App() {
   const [phone, setPhone] = useState("");
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [maxScore, setMaxScore] = useState(0);
+  const [registrationId, setRegistrationId] = useState<number | null>(null);
 
   function handleAgeSelect(category: AgeCategory) {
     setAgeCategory(category);
     setScreen("registration");
   }
 
-  function handleRegistrationStart(fn: string, ln: string, p: string) {
+  async function handleRegistrationStart(fn: string, ln: string, p: string) {
     setFirstName(fn);
     setLastName(ln);
     setPhone(p);
     setScreen("test");
+
+    // Ro'yxatga olish (#id berish). Xatolik bo'lsa ham test to'xtamaydi.
+    try {
+      const res = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fullName: `${fn} ${ln}`, phoneNumber: p, ageCategory }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { id?: number };
+        if (typeof data.id === "number") setRegistrationId(data.id);
+      }
+    } catch (err) {
+      console.error("Ro'yxatga olishda xatolik:", err);
+    }
   }
 
   async function handleTestComplete(answers: { questionId: number; selectedIndex: number }[]) {
@@ -82,6 +98,7 @@ export default function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          registrationId: registrationId ?? undefined,
           fullName,
           phoneNumber: phone,
           ageCategory,
@@ -123,6 +140,7 @@ export default function App() {
     setPhone("");
     setTestResult(null);
     setMaxScore(0);
+    setRegistrationId(null);
   }
 
   if (screen === "registration") {
