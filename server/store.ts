@@ -66,6 +66,11 @@ export async function isExtraAdmin(userId: number): Promise<boolean> {
   return r === 1;
 }
 
+export async function listAdmins(): Promise<number[]> {
+  const [r] = await pipeline([["SMEMBERS", K.admins]]);
+  return Array.isArray(r) ? r.map(Number).filter((n) => Number.isInteger(n) && n > 0) : [];
+}
+
 export async function addAdmin(userId: number) {
   await pipeline([["SADD", K.admins, userId]]);
 }

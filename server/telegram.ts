@@ -1,7 +1,7 @@
 // Telegram'ga natija yuboradigan umumiy mantiq.
 // Bot tokeni FAQAT serverda (env o'zgaruvchida) turadi, brauzerga chiqmaydi.
 
-import { markDone, storeConfigured } from "./store.js";
+import { listAdmins, markDone, storeConfigured } from "./store.js";
 
 export type TelegramPayload = {
   registrationId?: number;
@@ -108,24 +108,34 @@ export async function sendToTelegram(
     }
   }
 
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: buildMessage(payload),
-        disable_web_page_preview: true,
-      }),
-    });
-    if (!res.ok) {
-      const detail = await res.text();
-      console.error("Telegram xatosi:", res.status, detail);
-      return { status: 502, body: { ok: false, error: "Telegram xabarni qabul qilmadi" } };
+  // Natija asosiy adminga (TELEGRAM_CHAT_ID) va bot orqali qo'shilgan hamma adminlarga boradi
+  const recipients = new Set<string>([String(chatId).trim()]);
+  if (storeConfigured()) {
+    try {
+      for (const id of await listAdmins()) recipients.add(String(id));
+    } catch (err) {
+      console.error("Adminlar ro'yxatini olishda xato:", err);
     }
-    return { status: 200, body: { ok: true } };
-  } catch (err) {
-    console.error("Telegram so'rovi muvaffaqiyatsiz:", err);
-    return { status: 502, body: { ok: false, error: "Telegram'ga ulanib bo'lmadi" } };
   }
+
+  const text = buildMessage(payload);
+  const results = await Promise.all(
+    [...recipients].map(async (id) => {
+      try {
+        const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: id, text, disable_web_page_preview: true }),
+        });
+        if (!res.ok) console.error("Telegram xatosi:", id, res.status, await res.text());
+        return res.ok;
+      } catch (err) {
+        console.error("Telegram so'rovi muvaffaqiyatsiz:", id, err);
+        return false;
+      }
+    }),
+  );
+  // Kamida bittasiga (odatda asosiy adminga) yetib borgan bo'lsa, muvaffaqiyatli
+  if (results.some(Boolean)) return { status: 200, body: { ok: true } };
+  return { status: 502, body: { ok: false, error: "Telegram xabarni qabul qilmadi" } };
 }
