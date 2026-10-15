@@ -1,5 +1,5 @@
 // Vercel serverless funksiyasi: POST /api/bot (Telegram webhook)
-import { handleBotUpdate } from "../server/bot";
+import { handleBotUpdate } from "../server/bot.js";
 
 type Req = { method?: string; body?: unknown };
 type Res = {
