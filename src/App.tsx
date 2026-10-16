@@ -70,7 +70,8 @@ export default function App() {
       answers.map((a) => ({ selectedIndex: a.selectedIndex })),
       options,
     );
-    const max = questions.length * 2;
+    // 18+ testda har bir javob 0 yoki 1 ball beradi, boshqa toifalarda 0/1/2
+    const max = ageCategory === "18+" ? questions.length : questions.length * 2;
     setMaxScore(max);
 
     let resultData: { result: string; interpretation: TestResult["interpretation"]; parts?: TestResult["parts"] };

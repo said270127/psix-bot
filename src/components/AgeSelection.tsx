@@ -45,7 +45,7 @@ const categoryCards: { category: AgeCategory; icon: typeof Smile; label: string;
     icon: Users,
     label: "18+ yosh",
     desc: "Kattalar uchun psixologik test. Shaxs turi, kuchli tomonlar va mos sohalarni aniqlaydi.",
-    questions: "6 savol",
+    questions: "10 savol",
     accent: "from-teal-50",
     iconBg: "bg-teal-50",
     iconColor: "text-teal-500",

@@ -1,13 +1,18 @@
 // Telegram bot webhook mantiqi.
 // - Hamma uchun: /start → salomlashuv + "Testni yechish" tugmasi (sayt Mini App sifatida ochiladi)
-// - Adminlar uchun qo'shimcha tugmalar: "Ro'yxat" va "Admin qo'shish"
+// - Adminlar: "Ro'yxat" va "Adminlar ro'yxati"
+// - Bosh admin (TELEGRAM_CHAT_ID): yana "Admin qo'shish" va "Adminni olib tashlash"
 import {
   addAdmin,
   clearWait,
+  getAdminNames,
   getRegistrations,
   getStats,
   getWait,
   isExtraAdmin,
+  listAdmins,
+  removeAdmin,
+  setAdminName,
   setWait,
   storeConfigured,
   trackUser,
@@ -17,7 +22,7 @@ import {
 export type BotEnv = {
   token?: string;
   webAppUrl?: string;
-  ownerId?: string; // birinchi (asosiy) admin: TELEGRAM_CHAT_ID
+  ownerId?: string; // bosh admin: TELEGRAM_CHAT_ID
   webhookSecret?: string;
   headerSecret?: string; // Telegram yuborgan X-Telegram-Bot-Api-Secret-Token
 };
@@ -38,6 +43,7 @@ type TelegramUpdate = {
 };
 
 type Result = { status: number; body: { ok: boolean; error?: string } };
+type Role = "user" | "admin" | "owner";
 
 const PAGE_SIZE = 25;
 const CATEGORY_LABELS: Record<string, string> = {
@@ -47,7 +53,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   "18+": "18+ yosh",
 };
 
-export function buildWelcome(firstName?: string, admin = false): string {
+export function buildWelcome(firstName?: string, role: Role = "user"): string {
   const name = firstName ? `, ${firstName}` : "";
   const lines = [
     `Assalomu alaykum${name}! 👋`,
@@ -58,16 +64,26 @@ export function buildWelcome(firstName?: string, admin = false): string {
     "",
     "Boshlash uchun pastdagi tugmani bosing 👇",
   ];
-  if (admin) lines.push("", "🔐 Siz adminsiz: pastda ro'yxat va admin qo'shish tugmalari ham bor.");
+  if (role === "owner") {
+    lines.push("", "👑 Siz bosh adminsiz: ro'yxat, adminlar ro'yxati, admin qo'shish va olib tashlash tugmalari pastda.");
+  } else if (role === "admin") {
+    lines.push("", "🔐 Siz adminsiz: ro'yxat va adminlar ro'yxati tugmalari pastda.");
+  }
   return lines.join("\n");
 }
 
-function menuKeyboard(webAppUrl: string, admin: boolean) {
+export function menuKeyboard(webAppUrl: string, role: Role) {
   const rows: unknown[][] = [[{ text: "📝 Testni yechish", web_app: { url: webAppUrl } }]];
-  if (admin) {
+  if (role !== "user") {
     rows.push([
       { text: "📋 Ro'yxat", callback_data: "list" },
+      { text: "👥 Adminlar ro'yxati", callback_data: "admins" },
+    ]);
+  }
+  if (role === "owner") {
+    rows.push([
       { text: "➕ Admin qo'shish", callback_data: "addadmin" },
+      { text: "➖ Adminni olib tashlash", callback_data: "rmadmin" },
     ]);
   }
   return { inline_keyboard: rows };
@@ -102,6 +118,30 @@ export function buildListText(
   return lines.join("\n").slice(0, 4000);
 }
 
+export function buildAdminsText(
+  ownerId: string,
+  extras: number[],
+  names: Record<string, string>,
+): string {
+  const owner = names[String(ownerId)];
+  const lines = [
+    "👥 Adminlar ro'yxati",
+    "",
+    `👑 Bosh admin: ${owner ? `${owner} — ` : ""}${ownerId}`,
+    "",
+  ];
+  if (extras.length === 0) {
+    lines.push("Qo'shimcha adminlar yo'q.");
+  } else {
+    lines.push(`Adminlar (${extras.length}):`);
+    extras.forEach((id, i) => {
+      const n = names[String(id)];
+      lines.push(`${i + 1}. ${n ? `${n} — ${id}` : `${id} (ismi hali noma'lum)`}`);
+    });
+  }
+  return lines.join("\n").slice(0, 4000);
+}
+
 function pageKeyboard(page: number, pages: number) {
   const row: unknown[] = [];
   if (page > 0) row.push({ text: "◀️ Oldingi", callback_data: `list:${page - 1}` });
@@ -128,14 +168,27 @@ async function tg(token: string, method: string, body: unknown): Promise<boolean
   }
 }
 
-async function isAdmin(userId: number, env: BotEnv): Promise<boolean> {
-  if (env.ownerId && String(userId) === String(env.ownerId).trim()) return true;
-  if (!storeConfigured()) return false;
+function isOwnerId(userId: number, env: BotEnv): boolean {
+  return !!env.ownerId && String(userId) === String(env.ownerId).trim();
+}
+
+async function getRole(userId: number, env: BotEnv): Promise<Role> {
+  if (isOwnerId(userId, env)) return "owner";
+  if (!storeConfigured()) return "user";
   try {
-    return await isExtraAdmin(userId);
+    return (await isExtraAdmin(userId)) ? "admin" : "user";
   } catch (err) {
     console.error("Admin tekshirishda xato:", err);
-    return false;
+    return "user";
+  }
+}
+
+async function rememberName(user: TgUser) {
+  if (!user.first_name || !storeConfigured()) return;
+  try {
+    await setAdminName(user.id, user.first_name);
+  } catch (err) {
+    console.error("Ismni saqlashda xato:", err);
   }
 }
 
@@ -154,6 +207,10 @@ async function showList(token: string, chatId: number, page: number | null, mess
   else await tg(token, "sendMessage", payload);
 }
 
+function parseId(s: string): number | null {
+  return /^\d{5,15}$/.test(s) ? Number(s) : null;
+}
+
 async function handleCallback(
   cq: NonNullable<TelegramUpdate["callback_query"]>,
   env: BotEnv,
@@ -161,27 +218,34 @@ async function handleCallback(
 ) {
   const userId = cq.from.id;
   const chatId = cq.message?.chat.id ?? userId;
+  const data = cq.data ?? "";
+  const deny = (text: string) =>
+    tg(token, "answerCallbackQuery", { callback_query_id: cq.id, text, show_alert: true });
 
-  if (!(await isAdmin(userId, env))) {
-    await tg(token, "answerCallbackQuery", { callback_query_id: cq.id, text: "Ruxsat yo'q", show_alert: true });
-    return;
-  }
+  const role = await getRole(userId, env);
+  if (role === "user") return void (await deny("Ruxsat yo'q"));
+
+  // Admin qo'shish va olib tashlash faqat bosh adminga
+  const ownerOnly = data === "addadmin" || data === "rmadmin" || data === "rmno" || data.startsWith("rm:") || data.startsWith("rmok:");
+  if (ownerOnly && role !== "owner") return void (await deny("Bu tugma faqat bosh admin uchun"));
+
   if (!storeConfigured()) {
-    await tg(token, "answerCallbackQuery", {
-      callback_query_id: cq.id,
-      text: "Ma'lumotlar ombori (Upstash Redis) hali ulanmagan",
-      show_alert: true,
-    });
-    return;
+    return void (await deny("Ma'lumotlar ombori (Upstash Redis) hali ulanmagan"));
   }
   await tg(token, "answerCallbackQuery", { callback_query_id: cq.id });
+  await rememberName(cq.from);
 
-  const data = cq.data ?? "";
   try {
     if (data === "list") {
       await showList(token, chatId, null);
     } else if (data.startsWith("list:")) {
       await showList(token, chatId, Number(data.slice(5)) || 0, cq.message?.message_id);
+    } else if (data === "admins") {
+      const [extras, names] = await Promise.all([listAdmins(), getAdminNames()]);
+      await tg(token, "sendMessage", {
+        chat_id: chatId,
+        text: buildAdminsText(String(env.ownerId ?? ""), extras, names),
+      });
     } else if (data === "addadmin") {
       await setWait(userId, "add_admin");
       await tg(token, "sendMessage", {
@@ -195,6 +259,52 @@ async function handleCallback(
           "Bekor qilish: /cancel",
         ].join("\n"),
       });
+    } else if (data === "rmadmin") {
+      const [extras, names] = await Promise.all([listAdmins(), getAdminNames()]);
+      if (extras.length === 0) {
+        await tg(token, "sendMessage", { chat_id: chatId, text: "Olib tashlash uchun qo'shimcha admin yo'q." });
+      } else {
+        await tg(token, "sendMessage", {
+          chat_id: chatId,
+          text: "➖ Qaysi adminning huquqini olib tashlaymiz?",
+          reply_markup: {
+            inline_keyboard: [
+              ...extras.map((id) => [
+                { text: `❌ ${names[String(id)] ? `${names[String(id)]} ` : ""}(${id})`, callback_data: `rm:${id}` },
+              ]),
+              [{ text: "↩️ Bekor qilish", callback_data: "rmno" }],
+            ],
+          },
+        });
+      }
+    } else if (data.startsWith("rm:")) {
+      const id = parseId(data.slice(3));
+      if (id) {
+        const names = await getAdminNames();
+        await tg(token, "sendMessage", {
+          chat_id: chatId,
+          text: `❓ ${names[String(id)] ? `${names[String(id)]} ` : ""}(${id}) adminligini olib tashlaysizmi?`,
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "✅ Ha, olib tashlash", callback_data: `rmok:${id}` },
+                { text: "↩️ Yo'q", callback_data: "rmno" },
+              ],
+            ],
+          },
+        });
+      }
+    } else if (data.startsWith("rmok:")) {
+      const id = parseId(data.slice(5));
+      if (id && (await isExtraAdmin(id))) {
+        await removeAdmin(id);
+        await tg(token, "sendMessage", { chat_id: chatId, text: `✅ ${id} adminlikdan olib tashlandi.` });
+        await tg(token, "sendMessage", { chat_id: id, text: "Sizdan admin huquqi olib tashlandi." });
+      } else {
+        await tg(token, "sendMessage", { chat_id: chatId, text: "Bu odam allaqachon admin emas." });
+      }
+    } else if (data === "rmno") {
+      await tg(token, "sendMessage", { chat_id: chatId, text: "Bekor qilindi." });
     }
   } catch (err) {
     console.error("Callback xatosi:", err);
@@ -212,10 +322,13 @@ async function handleMessage(
   const from = msg.from;
   if (!chatId || !from || msg.chat?.type !== "private") return;
 
-  const admin = await isAdmin(from.id, env);
+  const role = await getRole(from.id, env);
   const text = (msg.text ?? "").trim();
 
-  if (admin && storeConfigured()) {
+  if (role !== "user") await rememberName(from);
+
+  // Admin qo'shish: faqat bosh admin
+  if (role === "owner" && storeConfigured()) {
     try {
       const waiting = await getWait(from.id);
       if (waiting === "add_admin" && !text.startsWith("/start")) {
@@ -224,17 +337,25 @@ async function handleMessage(
           await tg(token, "sendMessage", { chat_id: chatId, text: "Bekor qilindi." });
           return;
         }
-        if (/^\d{5,15}$/.test(text)) {
-          await addAdmin(Number(text));
+        const id = parseId(text);
+        if (id) {
+          if (isOwnerId(id, env) || (await isExtraAdmin(id))) {
+            await tg(token, "sendMessage", {
+              chat_id: chatId,
+              text: "Bu odam allaqachon admin. Boshqa ID yuboring yoki /cancel bosing.",
+            });
+            return;
+          }
+          await addAdmin(id);
           await clearWait(from.id);
           const notified = await tg(token, "sendMessage", {
-            chat_id: Number(text),
+            chat_id: id,
             text: "🔐 Sizga admin huquqi berildi. Menyuni ochish uchun /start yozing.",
           });
           await tg(token, "sendMessage", {
             chat_id: chatId,
-            text: `✅ Admin qo'shildi: ${text}` + (notified ? "" : "\n(U hali botga /start yozmagan, shuning uchun xabar bormadi. Unga /start yozishini ayting.)"),
-            reply_markup: menuKeyboard(webAppUrl, true),
+            text: `✅ Admin qo'shildi: ${id}` + (notified ? "" : "\n(U hali botga /start yozmagan, shuning uchun xabar bormadi. Unga /start yozishini ayting.)"),
+            reply_markup: menuKeyboard(webAppUrl, "owner"),
           });
           return;
         }
@@ -251,7 +372,7 @@ async function handleMessage(
   }
 
   // Oddiy foydalanuvchilar "botga kelganlar" hisobiga qo'shiladi (adminlar emas)
-  if (!admin && storeConfigured()) {
+  if (role === "user" && storeConfigured()) {
     try {
       await trackUser(from.id);
     } catch (err) {
@@ -261,8 +382,8 @@ async function handleMessage(
 
   await tg(token, "sendMessage", {
     chat_id: chatId,
-    text: buildWelcome(from.first_name, admin),
-    reply_markup: menuKeyboard(webAppUrl, admin),
+    text: buildWelcome(from.first_name, role),
+    reply_markup: menuKeyboard(webAppUrl, role),
   });
 }
 

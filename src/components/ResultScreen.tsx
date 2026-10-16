@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import ResultFooter from "./ResultFooter";
 import {
   Compass,
   Brain,
@@ -6,11 +7,6 @@ import {
   BarChart3,
   Zap,
   Rocket,
-  Lightbulb,
-  RotateCcw,
-  Home,
-  Sparkles,
-  ArrowRight,
   Briefcase,
   Users,
   Scale,
@@ -205,6 +201,7 @@ export default function ResultScreen({ result, maxScore, onRestart }: Props) {
 
   const isKindergarten = result.ageCategory === "3-7";
   const isTwoOption = result.ageCategory === "18+";
+  const isChildResult = result.ageCategory === "3-7" || result.ageCategory === "8-13";
 
   const aCount = result.answers.filter((a) => a.selectedIndex === 0).length;
   const bCount = result.answers.filter((a) => a.selectedIndex === 1).length;
@@ -312,54 +309,7 @@ export default function ResultScreen({ result, maxScore, onRestart }: Props) {
             );
           })}
 
-          {/* Paid Test Promotion */}
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl shadow-lg overflow-hidden">
-            <div className="p-6 sm:p-8">
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500">
-                  <Sparkles className="w-6 h-6 text-white" strokeWidth={1.5} />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-bold text-white mb-2">Bolangiz haqida yanada ko'proq bilishni xohlaysizmi?</h3>
-                  <p className="text-sm text-slate-300 leading-relaxed mb-4">
-                    Bepul test umumiy natijani ko'rsatadi. Batafsil tahlil uchun kengaytirilgan pullik testdan foydalanishingiz mumkin.
-                  </p>
-                  <a
-                    href="https://t.me/Malika_Umidova?text=Assalomu%20aleykum.%20Men%20sizning%20pullik%20testingiz%20haqida%20ko%27proq%20ma%27lumot%20olmoqchi%20edim"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-slate-900 font-semibold text-sm shadow-md hover:shadow-lg transition-all"
-                  >
-                    Batafsil ma'lumot olish
-                    <ArrowRight className="w-4 h-4" />
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Disclaimer */}
-          <div className="flex items-start gap-3 bg-blue-50 rounded-2xl p-5 border border-blue-100">
-            <Lightbulb className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-semibold text-blue-700 mb-1">Eslatma</p>
-              <p className="text-sm text-blue-600 leading-relaxed">
-                Ushbu bepul test bolangizning umumiy yo'nalishini ko'rsatib beradi. To'liq va aniq diagnostika uchun markazimizda psixolog bilan yuzma-yuz professional test va suhbat tashkil etiladi.
-              </p>
-            </div>
-          </div>
-
-          {/* Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3 pb-4">
-            <button onClick={onRestart} className="flex-1 py-3.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold shadow-sm hover:shadow-md hover:bg-slate-50 transition-all flex items-center justify-center gap-2">
-              <RotateCcw className="w-5 h-5" />
-              Testni qayta topshirish
-            </button>
-            <button onClick={onRestart} className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-slate-700 to-slate-800 text-white font-semibold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2">
-              <Home className="w-5 h-5" />
-              Bosh sahifaga qaytish
-            </button>
-          </div>
+        <ResultFooter forChild={isChildResult} onRestart={onRestart} />
         </div>
       </div>
     );
@@ -487,54 +437,7 @@ export default function ResultScreen({ result, maxScore, onRestart }: Props) {
           </div>
         </div>
 
-        {/* Paid Test Promotion */}
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl shadow-lg overflow-hidden">
-          <div className="p-6 sm:p-8">
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500">
-                <Sparkles className="w-6 h-6 text-white" strokeWidth={1.5} />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-bold text-white mb-2">O'zingiz haqingizda yanada ko'proq bilishni xohlaysizmi?</h3>
-                <p className="text-sm text-slate-300 leading-relaxed mb-4">
-                  Bepul test umumiy natijani ko'rsatadi. Batafsil tahlil uchun kengaytirilgan pullik testdan foydalanishingiz mumkin.
-                </p>
-                <a
-                  href="https://t.me/Malika_Umidova?text=Assalomu%20aleykum.%20Men%20sizning%20pullik%20testingiz%20haqida%20ko%27proq%20ma%27lumot%20olmoqchi%20edim"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-slate-900 font-semibold text-sm shadow-md hover:shadow-lg transition-all"
-                >
-                  Batafsil ma'lumot olish
-                  <ArrowRight className="w-4 h-4" />
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Disclaimer */}
-        <div className="flex items-start gap-3 bg-blue-50 rounded-2xl p-5 border border-blue-100">
-          <Lightbulb className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-blue-700 mb-1">Eslatma</p>
-            <p className="text-sm text-blue-600 leading-relaxed">
-              Ushbu bepul test umumiy yo'nalishni ko'rsatib beradi. To'liq va aniq diagnostika uchun markazimizda psixolog bilan yuzma-yuz professional test va suhbat tashkil etiladi.
-            </p>
-          </div>
-        </div>
-
-        {/* Buttons */}
-        <div className="flex flex-col sm:flex-row gap-3 pb-4">
-          <button onClick={onRestart} className="flex-1 py-3.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold shadow-sm hover:shadow-md hover:bg-slate-50 transition-all flex items-center justify-center gap-2">
-            <RotateCcw className="w-5 h-5" />
-            Testni qayta topshirish
-          </button>
-          <button onClick={onRestart} className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-slate-700 to-slate-800 text-white font-semibold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2">
-            <Home className="w-5 h-5" />
-            Bosh sahifaga qaytish
-          </button>
-        </div>
+        <ResultFooter forChild={isChildResult} onRestart={onRestart} />
       </div>
     </div>
   );

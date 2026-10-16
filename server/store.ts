@@ -40,6 +40,7 @@ function toObject(flat: unknown): Record<string, string> {
 const K = {
   users: "psix:users", // botga /start bosgan oddiy foydalanuvchilar
   admins: "psix:admins", // qo'shimcha adminlar
+  adminNames: "psix:adminnames", // adminlarning ismlari (ro'yxatda ko'rsatish uchun)
   seq: "psix:reg:seq", // #id hisoblagich
   regs: "psix:regs", // ro'yxatdan o'tganlar #id lari (tartib bilan)
   stats: "psix:stats", // hisoblagichlar
@@ -69,6 +70,22 @@ export async function isExtraAdmin(userId: number): Promise<boolean> {
 export async function listAdmins(): Promise<number[]> {
   const [r] = await pipeline([["SMEMBERS", K.admins]]);
   return Array.isArray(r) ? r.map(Number).filter((n) => Number.isInteger(n) && n > 0) : [];
+}
+
+export async function removeAdmin(userId: number) {
+  await pipeline([
+    ["SREM", K.admins, userId],
+    ["HDEL", K.adminNames, userId],
+  ]);
+}
+
+export async function setAdminName(userId: number, name: string) {
+  await pipeline([["HSET", K.adminNames, userId, name.slice(0, 60)]]);
+}
+
+export async function getAdminNames(): Promise<Record<string, string>> {
+  const [r] = await pipeline([["HGETALL", K.adminNames]]);
+  return toObject(r);
 }
 
 export async function addAdmin(userId: number) {
